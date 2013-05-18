@@ -10,4 +10,3 @@ Planned features:
   * Same computer multiplayer
   * AI
   * GUI
-

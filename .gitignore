@@ -6,5 +6,3 @@ cabal-dev
 *.chs.h
 *.exe
 .virthualenv
-
-
