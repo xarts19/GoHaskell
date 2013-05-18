@@ -4,6 +4,7 @@ module Board
 , Board
 , BoardType(..)
 , makeBoard
+, getSize
 , replace
 , replaceAll
 , showCompact
@@ -40,9 +41,13 @@ makeBoard boardType = makeBoard' $ boardSize boardType
     where
         makeBoard' size = [[Empty | _ <- [0..size-1]] | _ <- [0..size-1]]
 
+getSize :: Board -> Int
+getSize = length
+
 replace :: Board -> Cell -> Int -> Int -> Board
-replace board new_elem i j = replace' board (replace' (board !! i) new_elem (j + 1)) i
-    where replace' line cell k = let (xs, _:ys) = splitAt k line in xs ++ (cell : ys)
+replace board new_elem i j = replace' board (replace' (board !! correct_i) new_elem j) correct_i
+    where correct_i = getSize board - i - 1
+          replace' line cell k = let (xs, _:ys) = splitAt k line in xs ++ (cell : ys)
 
 replaceAll :: Board -> Cell -> [(Int, Int)] -> Board
 replaceAll board _ [] = board

@@ -7,7 +7,8 @@ import Data.Lens.Lazy ( (^=), (^.) )
 import Data.Lens.Template ( makeLenses )
 import Data.Maybe
 import Data.List ( elemIndex )
-import Control.Monad ( when, unless )
+import Control.Monad ( unless )
+import Control.Applicative ( (<$>), (<*>) )
 
 data GameOptions = GameOptions
                     { _boardSize :: Board.BoardType
@@ -67,40 +68,38 @@ multiplayerWorker options board last_passed = do
     let color1 = options ^. playerCell
     let color2 = Board.opposite color1
     (newBoard1, passed1) <- makeTurn board color1 color2 color1
-    if not (last_passed && passed1)
-       then do
-            (newBoard2, passed2) <- makeTurn newBoard1 color1 color2 color2
-            let isFinished = passed1 && passed2
-            unless isFinished $ multiplayerWorker options newBoard2 passed2
-       else return ()
+    unless (last_passed && passed1) $ do
+        (newBoard2, passed2) <- makeTurn newBoard1 color1 color2 color2
+        unless (passed1 && passed2) $ multiplayerWorker options newBoard2 passed2
 
 makeTurn :: Board.Board -> Board.Cell -> Board.Cell -> Board.Cell -> IO (Board.Board, Bool)
 makeTurn board color1 color2 color = do
     putStrLn $ "Player 1: " ++ show color1 ++ "; Player 2: " ++ show color2
-    putStrLn $ Board.showAnnotated board
+    putStr   $ Board.showAnnotated board
     readTurn
     where readTurn = do
             putStrLn $ "Player " ++ (if color1 == color then "1" else "2") ++ " (" ++ show color ++ ") turn:"
             move <- getLine
-            case parseTurn move of
+            case parseTurn move (Board.getSize board) of
                  Nothing       -> do putStrLn "Wrong move specifier, use LetterNumber, e. g. D4 or D 4"
                                      readTurn
                  Just (-1, -1) -> return (board, True)
                  Just (i, j)   -> return (Board.replace board color i j, False)
 
 -- Nothing == wrong turn specification; Just (-1, -1) == pass
-parseTurn :: String -> Maybe (Int, Int)
-parseTurn "" = Nothing
-parseTurn str@(ch:rest)
-                | map toLower str == "pass" = Just (-1, -1)
-                | otherwise = maybeTuple j i
-    where i = elemIndex (toUpper ch) Board.letterCoords
-          j = maybeRead rest
+parseTurn :: String -> Int -> Maybe (Int, Int)
+parseTurn "" _ = Nothing
+parseTurn str@(ch:rest) maxSize
+                | lowerStr == "pass" || lowerStr == "p" = Just (-1, -1)
+                | not (fromMaybe False ((&&) <$> fmap bounds i <*> fmap bounds j)) = Nothing
+                | otherwise = (,) <$> j <*> i
+    where lowerStr = map toLower str
+          bounds = inBounds 0 maxSize
+          i = elemIndex (toUpper ch) Board.letterCoords
+          j = (\x -> x - 1) <$> maybeRead rest
 
-maybeTuple :: Maybe a -> Maybe b -> Maybe (a, b)
-maybeTuple (Just a) (Just b) = Just (a, b)
-maybeTuple Nothing _         = Nothing
-maybeTuple _ Nothing         = Nothing
+inBounds :: Int -> Int -> Int -> Bool
+inBounds low high val = low <= val && val < high
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . filter (null . dropWhile isSpace . snd) . reads
