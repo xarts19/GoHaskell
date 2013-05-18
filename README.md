@@ -1,0 +1,4 @@
+GoHaskell
+=========
+
+Go game
