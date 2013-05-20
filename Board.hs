@@ -1,22 +1,32 @@
 module Board
 ( Cell(..)
-, opposite
 , Board
-, BoardType(..)
+, GoCoord
+, BoardCoord
 , makeBoard
+, opposite
+, fromGoCoord
+, toGoCoord
 , getSize
 , replace
 , replaceAll
+, checkOccupied
 , showCompact
 , showFull
 , showAnnotated
 , letterCoords
 ) where
 
+import Control.Applicative ( (<$>), (<*>) )
+import Data.Maybe
+import Data.Char ( toLower, toUpper )
+import Data.List ( elemIndex )
+
 data Cell = Empty | White | Black deriving (Eq, Show)
 type BoardRow = [Cell]
 type Board = [BoardRow]
-data BoardType = Small | Medium | Large deriving (Eq)
+type GoCoord = String
+type BoardCoord = (Int, Int)
 
 letterCoords :: String
 letterCoords = "ABCDEFGHJKLMNOPQRST"
@@ -26,32 +36,55 @@ opposite White = Black
 opposite Black = White
 opposite Empty = Empty
 
-boardSize :: BoardType -> Int
-boardSize Small = 9
-boardSize Medium = 13
-boardSize Large = 19
+makeBoard :: Int -> Board
+makeBoard size = [[Empty | _ <- [0..size-1]] | _ <- [0..size-1]]
 
-instance Show BoardType where
-    show Small = "Small (9)"
-    show Medium = "Medium (13)"
-    show Large = "Large (19)"
+maybeRead :: Read a => String -> Maybe a
+maybeRead = fmap fst . listToMaybe . filter (null . snd) . reads
 
-makeBoard :: BoardType -> Board
-makeBoard boardType = makeBoard' $ boardSize boardType
-    where
-        makeBoard' size = [[Empty | _ <- [0..size-1]] | _ <- [0..size-1]]
+-- Nothing == wrong turn specification; Just (-1, -1) == pass
+fromGoCoord :: GoCoord -> Maybe BoardCoord
+fromGoCoord "" = Nothing
+fromGoCoord str@(ch:rest)
+                | lowerStr == "pass" || lowerStr == "p" = Just (-1, -1)
+                | not (fromMaybe False ((&&) <$> fmap bounds i <*> fmap bounds j)) = Nothing
+                | otherwise = (,) <$> j <*> i
+    where lowerStr = map toLower str
+          bounds = inBounds 0 19
+          i = elemIndex (toUpper ch) letterCoords
+          j = (\x -> x - 1) <$> maybeRead rest
+
+inBounds :: Int -> Int -> Int -> Bool
+inBounds low high val = low <= val && val < high
+
+toGoCoord :: BoardCoord -> Maybe GoCoord
+toGoCoord (i, j)
+            | i < 0 || j < 0 = Nothing
+            | otherwise = Just (letterCoords !! j : show (i+1))
 
 getSize :: Board -> Int
 getSize = length
 
 replace :: Board -> Cell -> Int -> Int -> Board
-replace board new_elem i j = replace' board (replace' (board !! correct_i) new_elem j) correct_i
-    where correct_i = getSize board - i - 1
-          replace' line cell k = let (xs, _:ys) = splitAt k line in xs ++ (cell : ys)
+replace board new_elem i j = replace' board (replace' (board !! i) new_elem j) i
+    where replace' line cell k = let (xs, _:ys) = splitAt k line in xs ++ (cell : ys)
 
 replaceAll :: Board -> Cell -> [(Int, Int)] -> Board
 replaceAll board _ [] = board
 replaceAll board new_elem ((i, j):ijs) = replaceAll (replace board new_elem i j) new_elem ijs
+
+checkOccupied :: Board -> BoardCoord -> Either String BoardCoord
+checkOccupied board coord =
+    case checkOccupied' board coord of
+         Left err -> Left err
+         Right () -> Right coord
+    where checkOccupied' ([]:_) _ = Left "Too large row index"
+          checkOccupied' [] _ = Left "Too large column index"
+          checkOccupied' ((x:_):_) (0, 0)
+                | x == Empty = Right ()
+                | otherwise = Left "Occupied"
+          checkOccupied' ((_:xs):ys) (0, j) = checkOccupied' (xs:ys) (0, j-1)
+          checkOccupied' (_:xs) (i, j) = checkOccupied' xs (i-1, j)
 
 showCompactCell :: Cell -> Char
 showCompactCell Empty = '+'
@@ -69,18 +102,18 @@ showFull :: Board -> String
 showFull [] = "\n"
 showFull (r:rs) = show r ++ "\n" ++ showFull rs
 
-showAnnotatedHeader :: Int -> String
-showAnnotatedHeader size = "   " ++ take size letterCoords ++ "   \n"
+showAnnotated :: Board -> String
+showAnnotated board = header ++ showAnnotated' board 1 ++ header
+    where size = length board
+          header = showAnnotatedHeader size
 
 showAnnotated' :: Board -> Int -> String
 showAnnotated' [] _ = ""
-showAnnotated' (r:rs) n = showRow ++ showAnnotated' rs (n-1)
+showAnnotated' (r:rs) n = showAnnotated' rs (n+1) ++ showRow
     where row_n_str = show n
           fill = replicate (2 - length row_n_str) ' '
           showRow = fill ++ row_n_str ++ "|" ++ showCompactRow r ++ "|" ++ row_n_str ++ fill ++ "\n"
 
-showAnnotated :: Board -> String
-showAnnotated board = header ++ showAnnotated' board size ++ header
-    where size = length board
-          header = showAnnotatedHeader size
+showAnnotatedHeader :: Int -> String
+showAnnotatedHeader size = "   " ++ take size letterCoords ++ "   \n"
 

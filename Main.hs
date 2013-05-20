@@ -1,42 +1,55 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 import Board
+import Rules
 import System.Environment
-import Data.Char ( toLower, toUpper, isSpace )
+import Data.Char ( toLower )
 import Data.Lens.Lazy ( (^=), (^.) )
 import Data.Lens.Template ( makeLenses )
-import Data.Maybe
-import Data.List ( elemIndex )
 import Control.Monad ( unless )
-import Control.Applicative ( (<$>), (<*>) )
 
 data GameOptions = GameOptions
-                    { _boardSize :: Board.BoardType
-                    , _playerCell :: Board.Cell
+                    { _boardSize :: Int
+                    , _playerColor :: Cell
                     , _difficulty :: Int
                     , _komi :: Float }
 
-$( makeLenses [''GameOptions] )
+data GameState = GameState
+                  { _curBoard :: Board.Board
+                  , _score :: Float  -- Black : positive, White : negative
+                  , _whoseTurn :: Cell
+                  , _passes :: Int
+                  , _prevBoard :: Board.Board }
+
+$( makeLenses [''GameOptions,''GameState] )
 
 instance Show GameOptions where
-    show options = concat ["Size - ", show $ options ^. boardSize, "; ",
-                           "Player color - ", show $ options ^. playerCell, "; ",
-                           "Difficulty - ", show $ options ^. difficulty, "; ",
-                           "Komi - ", show $ options ^. komi]
+    show options = concat ["Size - ", show $ options^.boardSize, "; ",
+                           "Player color - ", show $ options^.playerColor, "; ",
+                           "Difficulty - ", show $ options^.difficulty, "; ",
+                           "Komi - ", show $ options^.komi]
 
 defaultOptions :: GameOptions
-defaultOptions = GameOptions { _boardSize = Board.Small,
-                               _playerCell = Board.Black,
+defaultOptions = GameOptions { _boardSize = 9,
+                               _playerColor = Black,
                                _difficulty = 1,
-                               _komi = 6.5 }
+                               _komi = -6.5 }
 
-getBoardSize :: IO Board.BoardType
+startingState :: GameOptions -> GameState
+startingState options = GameState { _curBoard = empty_board,
+                                    _score = options^.komi,
+                                    _whoseTurn = Black,
+                                    _passes = 0,
+                                    _prevBoard = empty_board }
+    where empty_board = makeBoard $ options ^. boardSize
+
+getBoardSize :: IO Int
 getBoardSize = do putStrLn "Choose board size: s - Small (9), m - Medium (13), l - Large (19):"
                   choice <- getLine
                   case map toLower choice of
-                     s | s `elem` ["small",  "s", "9"]  -> return Board.Small
-                       | s `elem` ["medium", "m", "13"] -> return Board.Medium
-                       | s `elem` ["large",  "l", "19"] -> return Board.Large
+                     s | s `elem` ["small",  "s", "9"]  -> return 9
+                       | s `elem` ["medium", "m", "13"] -> return 13
+                       | s `elem` ["large",  "l", "19"] -> return 19
                        | otherwise                      -> do putStrLn "Wrong! Try again"
                                                               getBoardSize
 
@@ -61,48 +74,41 @@ menuLoop args options = do
 
 startMultiplayer :: GameOptions -> IO ()
 startMultiplayer options =
-    multiplayerWorker options (Board.makeBoard $ options ^. boardSize) False
+    multiplayerWorker options $ startingState options
 
-multiplayerWorker :: GameOptions -> Board.Board -> Bool -> IO ()
-multiplayerWorker options board last_passed = do
-    let color1 = options ^. playerCell
-    let color2 = Board.opposite color1
-    (newBoard1, passed1) <- makeTurn board color1 color2 color1
-    unless (last_passed && passed1) $ do
-        (newBoard2, passed2) <- makeTurn newBoard1 color1 color2 color2
-        unless (passed1 && passed2) $ multiplayerWorker options newBoard2 passed2
+multiplayerWorker :: GameOptions -> GameState -> IO ()
+multiplayerWorker options state = do
+    newState <- makeTurn state
+    let newState1 = whoseTurn ^= opposite (state^.whoseTurn) $ newState
+    unless (newState1^.passes > 1) $ multiplayerWorker options newState1
 
-makeTurn :: Board.Board -> Board.Cell -> Board.Cell -> Board.Cell -> IO (Board.Board, Bool)
-makeTurn board color1 color2 color = do
-    putStrLn $ "Player 1: " ++ show color1 ++ "; Player 2: " ++ show color2
-    putStr   $ Board.showAnnotated board
+makeTurn :: GameState -> IO GameState
+makeTurn state = do
+    putStrLn $ "Score: (-) White <--- " ++ show (state^.score) ++ " ---> Black (+)"
+    putStr   $ Board.showAnnotated $ state^.curBoard
+    printGroups Black
+    printGroups White
     readTurn
-    where readTurn = do
-            putStrLn $ "Player " ++ (if color1 == color then "1" else "2") ++ " (" ++ show color ++ ") turn:"
+    where printGroups col = putStr $ show col ++ " groups:\n" ++ showGroups (groups (state^.curBoard) col)
+          readTurn = do
+            let color = state^.whoseTurn
+            putStrLn $ show color ++ "'s turn:"
             move <- getLine
-            case parseTurn move (Board.getSize board) of
-                 Nothing       -> do putStrLn "Wrong move specifier, use LetterNumber, e. g. D4 or D 4"
-                                     readTurn
-                 Just (-1, -1) -> return (board, True)
-                 Just (i, j)   -> return (Board.replace board color i j, False)
+            let parsed = case fromGoCoord move of
+                                Nothing       -> Left "Failed to parse (hint: use coordinates, ex. D4)"
+                                Just (-1, -1) -> Left "pass"
+                                Just (i, j)   -> Right (i, j)
+            let board = state^.curBoard
+            let action = parsed >>= checkSize board >>= checkOccupied board >>= checkSuicide board >>= checkKo board
+            case action of
+                 Left err | err == "pass" -> return $ passes ^= (state^.passes + 1) $ state
+                          | otherwise     -> putStrLn ("Wrong move: " ++ err) >> readTurn
+                 Right (i, j)   -> return $ (prevBoard ^= board) . (curBoard ^= Board.replace board color i j) $ state
 
--- Nothing == wrong turn specification; Just (-1, -1) == pass
-parseTurn :: String -> Int -> Maybe (Int, Int)
-parseTurn "" _ = Nothing
-parseTurn str@(ch:rest) maxSize
-                | lowerStr == "pass" || lowerStr == "p" = Just (-1, -1)
-                | not (fromMaybe False ((&&) <$> fmap bounds i <*> fmap bounds j)) = Nothing
-                | otherwise = (,) <$> j <*> i
-    where lowerStr = map toLower str
-          bounds = inBounds 0 maxSize
-          i = elemIndex (toUpper ch) Board.letterCoords
-          j = (\x -> x - 1) <$> maybeRead rest
-
-inBounds :: Int -> Int -> Int -> Bool
-inBounds low high val = low <= val && val < high
-
-maybeRead :: Read a => String -> Maybe a
-maybeRead = fmap fst . listToMaybe . filter (null . dropWhile isSpace . snd) . reads
+checkSize :: Board -> BoardCoord -> Either String BoardCoord
+checkSize board (i, j) | i >= size || j >= size = Left "Coordinates are too big"
+                       | otherwise              = Right (i, j)
+    where size = getSize board
 
 main :: IO ()
 main = getArgs >>= \a -> menuLoop a defaultOptions
