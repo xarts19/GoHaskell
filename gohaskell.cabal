@@ -12,6 +12,7 @@ Executable GoHaskell
   Main-is:           Main.hs
   Build-Depends:     base >= 3 && < 5,
                      containers >= 0.4.2.1,
+                     mtl >= 2.1.2,
                      data-lens-template >= 2.1.7,
                      data-lens >= 2.10.2
 --                     wx >= 0.13.2.3
