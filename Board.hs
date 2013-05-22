@@ -19,7 +19,7 @@ module Board
 
 import Control.Applicative ( (<$>), (<*>) )
 import Data.Maybe
-import Data.Char ( toLower, toUpper )
+import Data.Char ( toUpper )
 import Data.List ( elemIndex )
 
 data Cell = Empty | White | Black deriving (Eq, Show)
@@ -45,12 +45,10 @@ maybeRead = fmap fst . listToMaybe . filter (null . snd) . reads
 -- Nothing == wrong turn specification; Just (-1, -1) == pass
 fromGoCoord :: GoCoord -> Maybe BoardCoord
 fromGoCoord "" = Nothing
-fromGoCoord str@(ch:rest)
-                | lowerStr == "pass" || lowerStr == "p" = Just (-1, -1)
+fromGoCoord (ch:rest)
                 | not (fromMaybe False ((&&) <$> fmap bounds i <*> fmap bounds j)) = Nothing
                 | otherwise = (,) <$> j <*> i
-    where lowerStr = map toLower str
-          bounds = inBounds 0 19
+    where bounds = inBounds 0 19
           i = elemIndex (toUpper ch) letterCoords
           j = (\x -> x - 1) <$> maybeRead rest
 
@@ -58,9 +56,8 @@ inBounds :: Int -> Int -> Int -> Bool
 inBounds low high val = low <= val && val < high
 
 toGoCoord :: BoardCoord -> Maybe GoCoord
-toGoCoord (i, j)
-            | i < 0 || j < 0 = Nothing
-            | otherwise = Just (letterCoords !! j : show (i+1))
+toGoCoord (i, j)  | i < 0 || j < 0 = Nothing
+                  | otherwise = Just (letterCoords !! j : show (i+1))
 
 getSize :: Board -> Int
 getSize = length

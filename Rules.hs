@@ -52,14 +52,18 @@ groups board color = map (map fst) $ L.groupBy ((==) `on` snd) $ L.sortBy (compa
                 | otherwise = foldl (\acc x -> propagate x gr_id acc) inserted (neighbors i j)
             where inserted = M.insert (i, j) gr_id grmap
 
+
 showGroups :: [[BoardCoord]] -> String
 showGroups = foldl (\acc x -> acc ++ "( " ++ showGroup x ++ " )\n") []
+
 
 showGroupsWithLib :: Board -> [[BoardCoord]] -> String
 showGroupsWithLib board = foldl (\acc x -> acc ++ "( " ++ showGroup x ++ " ) : L = " ++ show (liberties board x) ++ "\n") []
 
+
 showGroup :: [BoardCoord] -> String
 showGroup = foldl (\acc x -> acc ++ " " ++ fromMaybe "Error" (toGoCoord x)) []
+
 
 liberties :: Board -> [BoardCoord] -> Int
 liberties board group = S.size $ liberties' group
@@ -70,8 +74,10 @@ liberties board group = S.size $ liberties' group
                 | i < 0 || j < 0 || i >= size || j >= size = False
                 | otherwise = ((board !! i) !! j) == Empty
 
+
 getCaptured :: Board -> Cell -> [BoardCoord]
 getCaptured board color = fromMaybe [] $ L.find (\gr -> liberties board gr == 0) (groups board color)
+
 
 -- assumes that BoardCoord is Empty
 -- For move to be suicidal, it needs to create a group with 0 liberties, but
@@ -80,13 +86,20 @@ checkSuicide :: Board -> Cell -> BoardCoord -> Either String BoardCoord
 checkSuicide board color coord
         | liberties newBoard myGroup == 0 = Left "No fucking way... (It would be a suicide)"
         | otherwise = Right coord
-    where simBoard = replaceAll board color [coord]
-          newBoard = replaceAll simBoard Empty $ getCaptured simBoard (opposite color)
+    where newBoard = simulateMove board color coord
           myGroup = fromMaybe [coord] $ L.find (\sublist -> coord `elem` sublist) (groups newBoard color)
 
 
 -- Ko rules forbids to revert board state to the previous one
 -- it prevents endless loops
 checkKo :: Board -> Board -> Cell -> BoardCoord -> Either String BoardCoord
-checkKo prevBoard curBoard color = Right
+checkKo prevBoard curBoard color coord
+        | prevBoard == newBoard = Left "Ko rule: prohibition of repetition"
+        | otherwise = Right coord
+    where newBoard = simulateMove curBoard color coord
+
+
+simulateMove :: Board -> Cell -> BoardCoord -> Board
+simulateMove board color coord = replaceAll simBoard Empty $ getCaptured simBoard (opposite color)
+    where simBoard = replaceAll board color [coord]
 
