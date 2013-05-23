@@ -9,7 +9,6 @@ module Board
 , toGoCoord
 , getSize
 , replace
-, replaceAll
 , checkOccupied
 , showCompact
 , showFull
@@ -62,13 +61,13 @@ toGoCoord (i, j)  | i < 0 || j < 0 = Nothing
 getSize :: Board -> Int
 getSize = length
 
-replace :: Board -> Cell -> Int -> Int -> Board
-replace board new_elem i j = replace' board (replace' (board !! i) new_elem j) i
+replaceElem :: Board -> Cell -> BoardCoord -> Board
+replaceElem board new_elem (i, j) = replace' board (replace' (board !! i) new_elem j) i
     where replace' line cell k = let (xs, _:ys) = splitAt k line in xs ++ (cell : ys)
 
-replaceAll :: Board -> Cell -> [(Int, Int)] -> Board
-replaceAll board _ [] = board
-replaceAll board new_elem ((i, j):ijs) = replaceAll (replace board new_elem i j) new_elem ijs
+replace :: Board -> Cell -> [BoardCoord] -> Board
+replace board _ [] = board
+replace board new_elem (ij:ijs) = replace (replaceElem board new_elem ij) new_elem ijs
 
 checkOccupied :: Board -> BoardCoord -> Either String BoardCoord
 checkOccupied board coord =

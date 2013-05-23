@@ -4,7 +4,7 @@ import Board
 import Rules
 import System.Environment
 import Data.Char ( toLower )
-import Data.Lens.Lazy ( (^=), (^.), (^+=) )
+import Data.Lens.Lazy ( (^=), (^.), (^+=), (^%=) )
 import Data.Lens.Template ( makeLenses )
 import Control.Monad ()
 import Control.Monad.State
@@ -32,8 +32,7 @@ data GameOptions = GameOptions
 
 data GameState = GameState
                   { _curBoard :: Board.Board
-                  , _scoreTerritory :: Float  -- Black : positive, White : negative
-                  , _scoreStones :: Int
+                  , _scoreStones :: Float    -- Black : positive, White : negative
                   , _whoseTurn :: Player
                   , _allMoves :: [Move]
                   , _passes :: Int
@@ -58,8 +57,7 @@ defaultOptions = GameOptions { _boardSize = 9
 
 startingState :: GameOptions -> GameState
 startingState options = GameState { _curBoard = empty_board
-                                  , _scoreTerritory = options^.komi
-                                  , _scoreStones = 0
+                                  , _scoreStones = options^.komi
                                   , _whoseTurn = PBlack
                                   , _allMoves = []
                                   , _passes = 0
@@ -110,24 +108,30 @@ multiplayerWorker options st = do
     let resigned = Resign == head (newState^.allMoves)
     let colStr = (show . pColor) (st^.whoseTurn)
     if finished || resigned
-       then
+       then do
            putStrLn $ "Game over: " ++ if finished then "both players passed"
                                                    else colStr ++ " resigned"
+           let score = fromIntegral (territory (newState^.curBoard) Black)
+                     - fromIntegral (territory (newState^.curBoard) White)
+                     - newState^.scoreStones
+           putStrLn $ "Score = " ++ show score ++ "; " ++ if score > 0 then "Black" else "White" ++ " has won!"
        else
-           let newState1 = whoseTurn ^= pOpposite (st^.whoseTurn) $ newState
+           let newState1 = whoseTurn ^%= pOpposite $ newState
            in multiplayerWorker options newState1
 
 
 makeTurn :: GameState -> IO GameState
 makeTurn st = do
-        putStrLn $ "Score: (-) White <--- " ++ show ((st^.scoreTerritory) + fromIntegral (st^.scoreStones)) ++ " ---> Black (+)"
+        putStrLn $ "Territory: White - " ++ show (territory (st^.curBoard) White)
+                         ++ "; Black - " ++ show (territory (st^.curBoard) Black)
+        putStrLn $ "Score: (-) White <--- " ++ show (st^.scoreStones) ++ " ---> Black (+)"
         putStr $ Board.showAnnotated $ st^.curBoard
         printGroups Black
         printGroups White
         let colStr = (show . pColor) (st^.whoseTurn)
         putStrLn $ colStr ++ "'s turn:"
         readTurn st
-    where printGroups col = putStr $ show col ++ " groups:\n" ++ showGroupsWithLib (st^.curBoard) (groups (st^.curBoard) col)
+    where printGroups col = putStr $ show col ++ " chains:\n" ++ showChainsWithLib (st^.curBoard) (chains (st^.curBoard) col)
 
 
 readTurn :: GameState -> IO GameState
@@ -135,10 +139,10 @@ readTurn st = do
     move <- getLine
     case readMove move >>= checkMove st of
         Left err     -> putStrLn ("Wrong move: " ++ err) >> readTurn st
-        Right m -> do
-            let newSt = allMoves ^= (m:(st^.allMoves)) $ st
-            case m of
-                Pass       -> return $ passes ^= (newSt^.passes + 1) $ newSt
+        Right mv -> do
+            let newSt = allMoves ^%= (mv:) $ st
+            case mv of
+                Pass       -> return $ passes ^+= 1 $ newSt
                 Resign     -> return newSt
                 Move coord -> return $ execState (execMove coord) newSt
 
@@ -168,16 +172,19 @@ execMove :: BoardCoord -> State GameState ()
 execMove coord = do
     color <- getColor
     saveBoard
-    addStone coord color
+    addStone color
     capt <- captured color
     removeCaptured capt
     updateScore (if color == Black then length capt else - length capt)
-    where getColor            = state $ \s -> (pColor $ s^.whoseTurn, s)
-          saveBoard           = state $ \s -> ((), prevBoard ^= (s^.curBoard) $ s)
-          addStone (i, j) col = state $ \s -> ((), curBoard ^= replace (s^.curBoard) col i j $ s)
-          captured col        = state $ \s -> (getCaptured (s^.curBoard) $ opposite col, s)
-          removeCaptured capt = state $ \s -> ((), curBoard ^= replaceAll (s^.curBoard) Empty capt $ s)
-          updateScore val     = state $ \s -> ((), scoreStones ^+= val $ s)
+    where getColor            = do s <- get
+                                   return $ pColor $ s^.whoseTurn
+          captured col        = do s <- get
+                                   return $ getCaptured (s^.curBoard) $ opposite col
+          saveBoard           = do s <- get
+                                   put $ prevBoard ^= (s^.curBoard) $ s
+          addStone col        = modify $ curBoard ^%= (\b -> replace b col [coord])
+          removeCaptured capt = modify $ curBoard ^%= (\b -> replace b Empty capt)
+          updateScore val     = modify $ scoreStones ^+= fromIntegral val
 
 
 checkSize :: Board -> BoardCoord -> Either String BoardCoord

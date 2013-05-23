@@ -1,9 +1,10 @@
 module Rules
 ( GroupMap
-, groups
+, chains
 , liberties
-, showGroups
-, showGroupsWithLib
+, territory
+, showChains
+, showChainsWithLib
 , getCaptured
 , checkSuicide
 , checkKo
@@ -33,16 +34,18 @@ toMap board = toMap' M.empty board 0 0
 neighbors :: Int -> Int -> [BoardCoord]
 neighbors i j = [(i, j-1), (i-1, j), (i, j+1), (i+1, j)]
 
-groups :: Board -> Cell -> [[BoardCoord]]
-groups board color = map (map fst) $ L.groupBy ((==) `on` snd) $ L.sortBy (compare `on` snd) (M.toList groupMap)
-    where groupMap = groups' board (0, 0) M.empty 0
+
+type Chain = [BoardCoord]
+chains :: Board -> Cell -> [Chain]
+chains board color = map (map fst) $ L.groupBy ((==) `on` snd) $ L.sortBy (compare `on` snd) (M.toList groupMap)
+    where groupMap = chains' board (0, 0) M.empty 0
 
           size = getSize board
 
-          groups' :: Board -> BoardCoord -> GroupMap -> Int -> GroupMap
-          groups' [] _ grmap _ = grmap
-          groups' ([]:ls) (i, _) grmap gr_id = groups' ls (i+1, 0) grmap gr_id
-          groups' ((x:l):ls) (i, j) grmap gr_id = groups' (l:ls) (i, j+1) (if x == color then propagate (i, j) gr_id grmap else grmap) (gr_id + 1)
+          chains' :: Board -> BoardCoord -> GroupMap -> Int -> GroupMap
+          chains' [] _ grmap _ = grmap
+          chains' ([]:ls) (i, _) grmap gr_id = chains' ls (i+1, 0) grmap gr_id
+          chains' ((x:l):ls) (i, j) grmap gr_id = chains' (l:ls) (i, j+1) (if x == color then propagate (i, j) gr_id grmap else grmap) (gr_id + 1)
 
           propagate :: BoardCoord -> Int -> GroupMap -> GroupMap
           propagate (i, j) gr_id grmap
@@ -53,30 +56,49 @@ groups board color = map (map fst) $ L.groupBy ((==) `on` snd) $ L.sortBy (compa
             where inserted = M.insert (i, j) gr_id grmap
 
 
-showGroups :: [[BoardCoord]] -> String
-showGroups = foldl (\acc x -> acc ++ "( " ++ showGroup x ++ " )\n") []
+showChains :: [Chain] -> String
+showChains = foldl (\acc x -> acc ++ "( " ++ showChain x ++ " )\n") []
 
 
-showGroupsWithLib :: Board -> [[BoardCoord]] -> String
-showGroupsWithLib board = foldl (\acc x -> acc ++ "( " ++ showGroup x ++ " ) : L = " ++ show (liberties board x) ++ "\n") []
+showChainsWithLib :: Board -> [Chain] -> String
+showChainsWithLib board = foldl (\acc x -> acc ++ "( " ++ showChain x ++ " ) : L = " ++ show (liberties board x) ++ "\n") []
 
 
-showGroup :: [BoardCoord] -> String
-showGroup = foldl (\acc x -> acc ++ " " ++ fromMaybe "Error" (toGoCoord x)) []
+showChain :: Chain -> String
+showChain = foldl (\acc x -> acc ++ " " ++ fromMaybe "Error" (toGoCoord x)) []
 
 
-liberties :: Board -> [BoardCoord] -> Int
-liberties board group = S.size $ liberties' group
-    where liberties' []            = S.empty
-          liberties' ((i, j):rest) = S.union (liberties' rest) $ S.fromList (filter isEmpty (neighbors i j))
+liberties :: Board -> Chain -> Int
+liberties board group = neighborCount board group Empty
+
+
+-- Empty return means Neutral territory
+territoryColor :: Board -> Chain -> Cell
+territoryColor board chain
+            | blackCount > 0 && whiteCount == 0 = Black
+            | whiteCount > 0 && blackCount == 0 = White
+            | otherwise = Empty
+    where blackCount = neighborCount board chain Black
+          whiteCount = neighborCount board chain White
+
+
+territory :: Board -> Cell -> Int
+territory board color = length $ concat $ filter ((==color) . territoryColor board) (chains board Empty)
+
+
+type NeighborColor = Cell
+neighborCount :: Board -> Chain -> NeighborColor -> Int
+neighborCount board group color = S.size $ count' group
+    where count' []            = S.empty
+          count' ((i, j):rest) = S.union (count' rest) $ S.fromList (filter isOfColor (neighbors i j))
           size = getSize board
-          isEmpty (i, j)
+          isOfColor (i, j)
                 | i < 0 || j < 0 || i >= size || j >= size = False
-                | otherwise = ((board !! i) !! j) == Empty
+                | otherwise = ((board !! i) !! j) == color
 
 
 getCaptured :: Board -> Cell -> [BoardCoord]
-getCaptured board color = fromMaybe [] $ L.find (\gr -> liberties board gr == 0) (groups board color)
+getCaptured board color = concat $ filter (\gr -> liberties board gr == 0) (chains board color)
 
 
 -- assumes that BoardCoord is Empty
@@ -84,10 +106,10 @@ getCaptured board color = fromMaybe [] $ L.find (\gr -> liberties board gr == 0)
 -- liberties should be counted after all captures have happened
 checkSuicide :: Board -> Cell -> BoardCoord -> Either String BoardCoord
 checkSuicide board color coord
-        | liberties newBoard myGroup == 0 = Left "No fucking way... (It would be a suicide)"
+        | liberties newBoard myChain == 0 = Left "Do you value your life at all?"
         | otherwise = Right coord
     where newBoard = simulateMove board color coord
-          myGroup = fromMaybe [coord] $ L.find (\sublist -> coord `elem` sublist) (groups newBoard color)
+          myChain = fromMaybe [coord] $ L.find (\chain -> coord `elem` chain) (chains newBoard color)
 
 
 -- Ko rules forbids to revert board state to the previous one
@@ -100,6 +122,6 @@ checkKo prevBoard curBoard color coord
 
 
 simulateMove :: Board -> Cell -> BoardCoord -> Board
-simulateMove board color coord = replaceAll simBoard Empty $ getCaptured simBoard (opposite color)
-    where simBoard = replaceAll board color [coord]
+simulateMove board color coord = replace simBoard Empty $ getCaptured simBoard (opposite color)
+    where simBoard = replace board color [coord]
 

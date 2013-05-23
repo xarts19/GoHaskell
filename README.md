@@ -1,7 +1,7 @@
 GoHaskell
 =========
 
-Go game. I'm writing to learn haskell.
+Go game I'm writing to learn haskell.
 
 Planned features:
 -----------------
