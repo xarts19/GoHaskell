@@ -2,6 +2,7 @@
 
 import Board
 import Rules
+import GoNetwork
 import System.Environment
 import Data.Char ( toLower )
 import Data.Lens.Lazy ( (^=), (^.), (^+=), (^%=) )

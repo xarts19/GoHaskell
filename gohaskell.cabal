@@ -11,11 +11,12 @@ Cabal-Version:       >=1.14
 Executable GoHaskell
   Main-is:           Main.hs
   Build-Depends:     base >= 3 && < 5,
-                     containers >= 0.4.2.1,
-                     mtl >= 2.1.2,
-                     data-lens-template >= 2.1.7,
-                     data-lens >= 2.10.2
+                     containers >= 0.4.2,
+                     mtl >= 2.1,
+                     data-lens-template >= 2.1,
+                     data-lens >= 2.10,
+                     network >= 2.3
 --                     wx >= 0.13.2.3
   Default-language:  Haskell2010
-  Ghc-options:       -Wall
+  Ghc-options:       -Wall -threaded
 -- -optl-mwindows -package wx
