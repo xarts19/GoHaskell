@@ -21,7 +21,7 @@ import Data.Maybe
 import Data.Char ( toUpper )
 import Data.List ( elemIndex )
 
-data Cell = Empty | White | Black deriving (Eq, Show)
+data Cell = Empty | White | Black deriving (Eq, Show, Read)
 type BoardRow = [Cell]
 type Board = [BoardRow]
 type GoCoord = String
@@ -55,7 +55,7 @@ inBounds :: Int -> Int -> Int -> Bool
 inBounds low high val = low <= val && val < high
 
 toGoCoord :: BoardCoord -> Maybe GoCoord
-toGoCoord (i, j)  | i < 0 || j < 0 = Nothing
+toGoCoord (i, j)  | i < 0 || j < 0 || i >= 19 || j >= 19 = Nothing
                   | otherwise = Just (letterCoords !! j : show (i+1))
 
 getSize :: Board -> Int
