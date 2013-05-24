@@ -9,6 +9,7 @@ import Network
 import System.IO
 import Data.Lens.Lazy ( (^%=), (^.) )
 import Control.Monad ( unless )
+import qualified Control.Exception as Ex
 
 
 commPort :: PortID
@@ -71,7 +72,11 @@ handleTurns st handle local = do
 readMoveRemote :: Handle -> IO Move
 readMoveRemote handle = do
     putStrLn "Wating for opponent's move..."
-    move <- fmap read $ hGetLine handle
+    result <- Ex.try (hGetLine handle) :: IO (Either IOError String)
+    move <- case result of
+                Left ex  -> do putStrLn $ "Player left... (" ++ show ex ++ ")"
+                               return Resign
+                Right mv -> return $ read mv
     putStrLn $ "Opponent's move: " ++ showMove move
     return move
 
@@ -79,8 +84,14 @@ readMoveRemote handle = do
 readMoveLocal :: Handle -> GameState -> IO Move
 readMoveLocal handle st = do
     putStrLn "Your move:"
-    move <- readMove st
-    hPrint handle move
+    moveRes <- Ex.try (readMove st) :: IO (Either IOError Move)
+    move <- case moveRes of
+         Left _ -> return Resign
+         Right mv -> return mv
+    printRes <- Ex.try (hPrint handle move) :: IO (Either IOError ())
+    case printRes of
+         Left ex -> putStrLn $ "Failed to send move to opponent... (" ++ show ex ++ ")"
+         Right _ -> return ()
     return move
 
 

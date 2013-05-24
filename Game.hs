@@ -22,7 +22,7 @@ module Game
 
 , pOpposite
 
-, Move
+, Move(..)
 , showMove
 
 , Player(..)
@@ -150,8 +150,7 @@ readMove st = do
 
 makeMove :: GameState -> Move -> IO GameState
 makeMove st move = do
-    let colStr = (show . pColor) (st^.whoseTurn)
-
+    let curPlayer = pColor (st^.whoseTurn)
     newState <- makeMove' st
     let finished = newState^.passes > 1
     let resigned = Resign == head (newState^.allMoves)
@@ -159,8 +158,9 @@ makeMove st move = do
     if finished || resigned
        then do
            putStrLn $ "Game over: " ++ if finished then "both players passed"
-                                                   else colStr ++ " resigned"
-           putStrLn $ whoWins $ newState^.score
+                                                   else show curPlayer ++ " resigned"
+           putStrLn $ if resigned then (show . opposite) curPlayer ++ " won!"
+                                  else whoWins $ newState^.score
            return $ gameOver ^= True $ newState
        else
            return $ whoseTurn ^%= pOpposite $ newState
