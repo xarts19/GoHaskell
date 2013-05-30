@@ -15,8 +15,7 @@ Executable GoHaskell
                      mtl >= 2.1,
                      data-lens-template >= 2.1,
                      data-lens >= 2.10,
-                     network >= 2.3
---                     wx >= 0.13.2.3
+                     network >= 2.3,
   Default-language:  Haskell2010
   Ghc-options:       -Wall -threaded
--- -optl-mwindows -package wx
+-- -optl-mwindows    (the standard input/output/error for Windows GUI programs is not, never use the standard input/output/error)
