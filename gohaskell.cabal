@@ -17,7 +17,9 @@ Executable GoHaskell
                      data-lens >= 2.10,
                      network >= 2.3,
                      gtk >= 0.12,
-                     cairo >= 0.12
+                     cairo >= 0.12,
+                     ansi-terminal >= 0.6,
+                     netwire >= 4.0
   Default-language:  Haskell2010
   Ghc-options:       -Wall -threaded
 -- -optl-mwindows    (the standard input/output/error for Windows GUI programs is not connected, never use the standard input/output/error)

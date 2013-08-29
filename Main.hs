@@ -1,3 +1,5 @@
+{-
+
 import Gui
 import Game
 import GoNetwork ( startServer, startClient )
@@ -86,3 +88,35 @@ main = do
     if "--console" `elem` args then menuLoop defaultOptions args
                                else mainWithGui defaultOptions args
 
+-}
+
+
+import Control.Wire
+import Prelude hiding ((.), id)
+import System.Console.ANSI
+import Data.Maybe
+import Control.Applicative ((<$>))
+ 
+control whenInhibited whenProduced wire = loop wire clockSession
+   where
+     loop w' session' = do
+         (mx, w, session) <- stepSession w' session' ()
+         case mx of
+           Left ex -> whenInhibited ex
+           Right x -> whenProduced x
+         loop w session
+ 
+foreign import ccall unsafe "conio.h getch" c_getch :: IO Char
+foreign import ccall unsafe "conio.h kbhit" c_kbhit :: IO Bool
+keyPressed = do isKey <- c_kbhit
+                if isKey then Just <$> c_getch
+                         else return Nothing
+ 
+                         
+pressedKeyMaybe = mkFixM $
+     \_ _ -> Right <$> keyPressed
+ 
+
+main = control return (putStrLn . show) $
+    when (/= Nothing) . pressedKeyMaybe
+    
