@@ -1,0 +1,36 @@
+
+data GameOptions = GameOptions
+                    { _boardSize :: Int
+                    , _playerColor :: Player
+                    , _difficulty :: Int
+                    , _komi :: Float } deriving (Show, Read)
+
+
+data GameState = GameState
+                  { _curBoard :: Board.Board
+                  , _score :: Score
+                  , _whoseTurn :: Player
+                  , _allMoves :: [Move]
+                  , _passes :: Int
+                  , _prevBoard :: Board.Board
+                  , _gameOver :: Bool }
+                  
+                  
+game engine takes options and state
+and returns:
+
+state:
+    - current board
+    - previous board
+    - list of all moves
+    - (optional) whose turn (Black if length of list of all moves is even)
+    - number of captured black
+    - number of captured white
+
+makeMove :: state -> move -> (state, result)
+result = Success | Pass | Resign | Fail String(reason - not allowed, etc)
+OR
+result = Either String Move -- successful move or string explaining why it failed
+
+
+

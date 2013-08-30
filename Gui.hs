@@ -4,22 +4,35 @@ module Gui
 
 import Board
 import Game
+import GameEngine
 import Graphics.UI.Gtk
 import Graphics.Rendering.Cairo
+import Data.Lens.Lazy ( (^=), (^.), (^+=), (^%=) )
+import Control.Concurrent
+import Control.Concurrent.MVar
+import System.Exit
 
 
-mainWithGui :: GameOptions -> [String] -> IO()
+mainWithGui :: GameOptions -> [String] -> IO ()
 mainWithGui opts args = do
+    exitFlag <- newEmptyMVar
+
     _ <- initGUI
 
     btnStartGame <- buttonNewWithLabel "New game"
-    _ <- onClicked btnStartGame (startMultiplayer opts)
+    _ <- onClicked btnStartGame $ do
+        _ <- forkIO (startMultiplayer opts)
+        return ()
+
+    exitButton <- buttonNewWithLabel "Exit"
+    _ <- exitButton `on` buttonActivated $ putMVar exitFlag ExitSuccess
 
     canvas <- drawingAreaNew
-    _ <- canvas `on` exposeEvent $ updateCanvas
+    _ <- canvas `on` exposeEvent $ updateCanvas opts
 
     vBox <- vBoxNew False 0
     boxPackStart vBox btnStartGame PackNatural 0
+    boxPackEnd vBox exitButton PackNatural 0
 
     hBox <- hBoxNew False 0
     boxPackStart hBox canvas PackGrow 0
@@ -32,8 +45,11 @@ mainWithGui opts args = do
     set window [windowDefaultWidth := 700, windowDefaultHeight := 400,
                 containerBorderWidth := 10]
     widgetShowAll window
-    mainGUI
-
+    _ <- forkOS mainGUI
+    signal <- takeMVar exitFlag
+    postGUIAsync mainQuit
+    exitWith signal
+    
 
 startMultiplayer :: GameOptions -> IO ()
 startMultiplayer opts = do
@@ -48,14 +64,14 @@ handleTurns st color = do
     putStrLn $ show color ++ " moves: "
 
 
-updateCanvas :: EventM EExpose Bool
-updateCanvas = do
+updateCanvas :: GameOptions -> EventM EExpose Bool
+updateCanvas opts = do
     win <- eventWindow
     liftIO $ do
         (width',height') <- drawableGetSize win
         let width  = realToFrac width'
             height = realToFrac height'
-            bSize = 9
+            bSize = fromIntegral $ opts^.boardSize
 
         -- Draw using the cairo api
         renderWithDrawable win $ do
@@ -64,7 +80,7 @@ updateCanvas = do
             let size = if width < height then width else height
             drawBoard size (size/(bSize+1)) bSize
 
-    return True
+    return False
 
     where drawBoard _ _ 0 = return ()
           drawBoard size step i = do
