@@ -1,13 +1,36 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module GameEngine
-( GameState
--- helpers
-, makeMove
--- accessors
-, Move(..)
+( Move(..)
 , Player(..)
+
+, GameOptions(..)
+, boardSize
+, pcPlayer
+, defaultOptions
+
+, GameState(..)
+, curBoard
+, allMoves
+, curPlayer
+, initState
+
+, isMoveAllowed
+, makeMove
+, showMove
+, whyGameOver
+
 ) where
+
+
+import Board
+import Rules
+import Data.Lens.Lazy ( (^=), (^.), (^+=), (^%=) )
+import Data.Lens.Template ( makeLenses )
+import Control.Monad.State
+import Data.Maybe
+import Data.Monoid
+
 
 data Move = Pass | Resign | Move BoardCoord deriving (Show, Eq, Read)
 data Player = PlayerBlack | PlayerWhite deriving (Show, Eq, Read)
@@ -15,14 +38,36 @@ data Player = PlayerBlack | PlayerWhite deriving (Show, Eq, Read)
 data GameState = GameState
                   { _curBoard :: Board.Board
                   , _prevBoard :: Board.Board
-                  , _allMoves :: [Move]
+                  , _allMoves :: [(Move, Player)]   -- new moves are appended to the front
                   , _curPlayer :: Player
                   , _numCapturedBlack :: Int
                   , _numCapturedWhite :: Int }
 
-$( makeLenses [''GameState] )
+data GameOptions = GameOptions
+                    { _boardSize :: Int
+                    , _pcPlayer :: Player
+                    , _difficulty :: Int
+                    , _komi :: Float } deriving (Show, Read)
+
+$( makeLenses [''GameState,''GameOptions] )
 
 type FailReason = String
+
+defaultOptions :: GameOptions
+defaultOptions = GameOptions { _boardSize = 9
+                             , _pcPlayer = PlayerBlack
+                             , _difficulty = 1
+                             , _komi = 6.5 }
+
+
+initState :: GameOptions -> GameState
+initState options = GameState {   _curBoard = empty_board
+                                , _prevBoard = empty_board
+                                , _allMoves = []
+                                , _curPlayer = PlayerBlack
+                                , _numCapturedBlack = 0
+                                , _numCapturedWhite = 0 }
+    where empty_board = makeBoard $ options ^. boardSize
 
 
 toStoneColor :: Player -> Cell
@@ -30,44 +75,64 @@ toStoneColor PlayerBlack = Black
 toStoneColor PlayerWhite = White
 
 
-checkMove :: GameState -> Move -> Either String Move
-checkMove _ Pass          = Right Pass
-checkMove _ Resign        = Right Resign
-checkMove st (Move coord) = case checked of
-                                 Left err -> Left err
-                                 Right m  -> Right $ Move m
-    where board = st^.curBoard
-          color = toStoneColor (st^.curPlayer)
-          checked = Right coord >>= checkSize board >>= checkOccupied board
-                                >>= checkSuicide board color >>= checkKo (st^.prevBoard) board color
+opposite :: Player -> Player
+opposite PlayerBlack = PlayerWhite
+opposite PlayerWhite = PlayerBlack
 
+
+showMove :: Move -> String
+showMove Pass = "pass"
+showMove Resign = "resign"
+showMove (Move m) = fromMaybe "Error" $ toGoCoord m
+
+
+applyMove :: Move -> State GameState ()
+applyMove move = do
+    st <- get
+    let player = st^.curPlayer
+        board = st^.curBoard
+        color = toStoneColor $ player
+    case move of
+        Move coord -> do
+            modify $ prevBoard ^= board
+            modify $ curBoard ^%= (\b -> replace b color [coord])
+            let capturedStones = getCaptured board (Board.opposite color)
+            case player of
+                PlayerBlack -> modify $ numCapturedWhite ^+= (length capturedStones)
+                PlayerWhite -> modify $ numCapturedBlack ^+= (length capturedStones)
+            modify $ curBoard ^%= (\b -> replace b Empty capturedStones)
+        _          -> return ()
+    modify $ curPlayer ^%= GameEngine.opposite
+    modify $ allMoves ^%= ((move, player):)
+
+
+isMoveAllowed :: GameState -> Move -> Maybe FailReason
+isMoveAllowed st (Move coord) =
+    let board = st^.curBoard
+        color = toStoneColor $ st^.curPlayer
+    in  whyGameOver st <>
+        checkBounds board coord <>
+        checkOccupied board coord <>
+        checkSuicide board color coord <> 
+        checkKo (st^.prevBoard) board color coord
+isMoveAllowed st _ = whyGameOver st
+        
 
 makeMove :: Move -> State GameState (Either FailReason Move)
 makeMove move = do
     st <- get
-    let isBlacksTurn = (length $ st^.allMoves) % 2 == 0
-    let boardNow = st^.curBoard
-    case move of
-        
-    saveBoard
-    addStone color
-    capt <- captured color
-    removeCaptured capt
-    updateScore $ if color == Black then (length capt, 0) else (0, length capt)
-    where getColor            = do s <- get
-                                   return $ pColor $ s^.whoseTurn
-          captured col        = do s <- get
-                                   return $ getCaptured (s^.curBoard) $ opposite col
-          saveBoard           = do s <- get
-                                   put $ prevBoard ^= (s^.curBoard) $ s
-          addStone col        = modify $ curBoard ^%= (\b -> replace b col [coord])
-          removeCaptured capt = modify $ curBoard ^%= (\b -> replace b Empty capt)
-          updateScore stns    = do s <- get
-                                   let tb = territory (s^.curBoard) Black
-                                   let tw = territory (s^.curBoard) White
-                                   modify $ (score ^%= updateStones stns) . (score ^%= setTerritory (tb, tw))
+    case isMoveAllowed st move of
+        Just err -> return $ Left err
+        Nothing  -> do applyMove move
+                       return $ Right move
 
-checkSize :: ReaderT GameState Either String BoardCoord
 
+whyGameOver :: GameState -> Maybe String
+whyGameOver st = check' moves <> noEmptyCells
+    where moves = st^.allMoves
+          check' ((Resign, _):_) = Just "Player resigned"
+          check' ((Pass, _):(Pass, _):_) = Just "Both players passed"
+          check' _ = Nothing
+          noEmptyCells = Nothing -- TODO: implement
 
 

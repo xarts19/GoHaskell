@@ -9,11 +9,13 @@ module Board
 , toGoCoord
 , getSize
 , replace
+, checkBounds
 , checkOccupied
 , showCompact
 , showFull
 , showAnnotated
 , letterCoords
+, boardToList
 ) where
 
 import Control.Applicative ( (<$>), (<*>) )
@@ -25,7 +27,7 @@ data Cell = Empty | White | Black deriving (Eq, Show, Read)
 type BoardRow = [Cell]
 type Board = [BoardRow]
 type GoCoord = String
-type BoardCoord = (Int, Int)
+type BoardCoord = (Int, Int)    -- [0, n)
 
 letterCoords :: String
 letterCoords = "ABCDEFGHJKLMNOPQRST"
@@ -69,18 +71,19 @@ replace :: Board -> Cell -> [BoardCoord] -> Board
 replace board _ [] = board
 replace board new_elem (ij:ijs) = replace (replaceElem board new_elem ij) new_elem ijs
 
-checkOccupied :: Board -> BoardCoord -> Either String BoardCoord
-checkOccupied board coord =
-    case checkOccupied' board coord of
-         Left err -> Left err
-         Right () -> Right coord
-    where checkOccupied' ([]:_) _ = Left "Too large row index"
-          checkOccupied' [] _ = Left "Too large column index"
-          checkOccupied' ((x:_):_) (0, 0)
-                | x == Empty = Right ()
-                | otherwise = Left "Occupied"
-          checkOccupied' ((_:xs):ys) (0, j) = checkOccupied' (xs:ys) (0, j-1)
-          checkOccupied' (_:xs) (i, j) = checkOccupied' xs (i-1, j)
+checkBounds :: Board -> BoardCoord -> Maybe String
+checkBounds board (i, j) | i >= size || j >= size = Just "Coordinates are too big"
+                       | otherwise              = Nothing
+    where size = getSize board
+
+checkOccupied :: Board -> BoardCoord -> Maybe String
+checkOccupied ([]:_) _ = Just "Too large row index"
+checkOccupied [] _ = Just "Too large column index"
+checkOccupied ((x:_):_) (0, 0)
+    | x == Empty = Nothing
+    | otherwise = Just "Cell already occupied"
+checkOccupied ((_:xs):ys) (0, j) = checkOccupied (xs:ys) (0, j-1)
+checkOccupied (_:xs) (i, j) = checkOccupied xs (i-1, j)
 
 showCompactCell :: Cell -> Char
 showCompactCell Empty = '+'
@@ -112,4 +115,12 @@ showAnnotated' (r:rs) n = showAnnotated' rs (n+1) ++ showRow
 
 showAnnotatedHeader :: Int -> String
 showAnnotatedHeader size = "   " ++ take size letterCoords ++ "   \n"
+
+boardToList :: Board -> [(Int, Int, Cell)]
+boardToList board = boardToList' [] board 0 0
+    where rowToList result [] _ _ = result
+          rowToList result (x:xs) i j = (i, j, x):(rowToList result xs (i+1) j)
+          boardToList' result [] _ _ = result
+          boardToList' result (r:rs) i j = (rowToList [] r i j) ++ boardToList' result rs i (j+1)
+
 

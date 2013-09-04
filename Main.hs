@@ -1,5 +1,6 @@
 import Gui
 import Game
+import GameEngine ( defaultOptions )
 import GoNetwork ( startServer, startClient )
 import Board ( Cell(..), opposite )
 import System.Environment
@@ -83,6 +84,6 @@ handleTurns st color = do
 main :: IO ()
 main = do
     args <- getArgs
-    if "--console" `elem` args then menuLoop defaultOptions args
-                               else mainWithGui defaultOptions args
+    if "--console" `elem` args then menuLoop Game.defaultOptions args
+                               else mainWithGui GameEngine.defaultOptions args
 

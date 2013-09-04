@@ -200,8 +200,9 @@ checkMove st (Move coord) = case checked of
                                  Right m  -> Right $ Move m
     where board = st^.curBoard
           color = pColor (st^.whoseTurn)
-          checked = Right coord >>= checkSize board >>= checkOccupied board
-                                >>= checkSuicide board color >>= checkKo (st^.prevBoard) board color
+          checked = Right coord
+                    -- Right coord >>= checkSize board >>= checkOccupied board
+                    --             >>= checkSuicide board color >>= checkKo (st^.prevBoard) board color
 
 
 execMove :: BoardCoord -> State GameState ()

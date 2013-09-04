@@ -104,20 +104,20 @@ getCaptured board color = concat $ filter (\gr -> liberties board gr == 0) (chai
 -- assumes that BoardCoord is Empty
 -- For move to be suicidal, it needs to create a group with 0 liberties, but
 -- liberties should be counted after all captures have happened
-checkSuicide :: Board -> Cell -> BoardCoord -> Either String BoardCoord
+checkSuicide :: Board -> Cell -> BoardCoord -> Maybe String
 checkSuicide board color coord
-        | liberties newBoard myChain == 0 = Left "Do you value your life at all?"
-        | otherwise = Right coord
+        | liberties newBoard myChain == 0 = Just "Do you value your life at all?"
+        | otherwise = Nothing
     where newBoard = simulateMove board color coord
           myChain = fromMaybe [coord] $ L.find (\chain -> coord `elem` chain) (chains newBoard color)
 
 
 -- Ko rules forbids to revert board state to the previous one
 -- it prevents endless loops
-checkKo :: Board -> Board -> Cell -> BoardCoord -> Either String BoardCoord
+checkKo :: Board -> Board -> Cell -> BoardCoord -> Maybe String
 checkKo prevBoard curBoard color coord
-        | prevBoard == newBoard = Left "Ko rule: prohibition of repetition"
-        | otherwise = Right coord
+        | prevBoard == newBoard = Just "Ko rule: prohibition of repetition"
+        | otherwise = Nothing
     where newBoard = simulateMove curBoard color coord
 
 

@@ -32,5 +32,3 @@ result = Success | Pass | Resign | Fail String(reason - not allowed, etc)
 OR
 result = Either String Move -- successful move or string explaining why it failed
 
-
-

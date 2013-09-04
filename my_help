@@ -1,0 +1,35 @@
+data-lens
+==============
+
+Using templates to create lenses
+--------------------------------
+
+import Data.Lens.Template ( makeLenses )
+
+data Record1 = Record1
+                { _field1 :: Type1
+                , _field2 :: Type2
+                , _field3 :: Type3
+                , _field4 :: Type4 } deriving (Show, Read)
+
+$( makeLenses [''Record1] )
+
+-- created lenses have names field1, field2, ... and can be exported from module like ordinary functions.
+
+Useful functions
+----------------
+
+import Data.Lens.Lazy ( (^=), (^.), (^+=), (^%=) )
+
+    * ^.    Return value of the field from record. E. g.:
+          let value = strcutVariable^.fieldName in ...
+
+    * ^=    Assign value to a field. E. g.:
+          fieldName^=value $ strcutVariable
+          
+    * ^%=   Apply function to the field from record. E. g.:
+          fieldName^%=someFunctionOfOneArgument $ strcutVariable
+      
+    * ^+=   Increment field value by given amount. E. g.:
+          fieldName^+=amount $ strcutVariable
+

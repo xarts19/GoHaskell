@@ -1,5 +1,5 @@
 Name:                GoHaskell
-Version:             0.0
+Version:             0.1
 Description:         Go game in haskell
 License:             MIT
 License-file:        LICENSE
@@ -10,7 +10,7 @@ Cabal-Version:       >=1.14
 
 Executable GoHaskell
   Main-is:           Main.hs
-  Build-Depends:     base >= 3 && < 5,
+  Build-Depends:     base >= 4,
                      containers >= 0.4.2,
                      mtl >= 2.1,
                      data-lens-template >= 2.1,
