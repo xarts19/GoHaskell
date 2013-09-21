@@ -38,9 +38,9 @@ mainWithGui opts args = do
 
     canvas <- drawingAreaNew
     widgetAddEvents canvas [ButtonPressMask, PointerMotionMask]
-    _ <- canvas `on` canvasExposeHandler $ updateCanvas opts gameStateMVar boardHoverMVar
-    _ <- canvas `on` canvasClickHandler $ addStone opts boardClickMVar
-    _ <- canvas `on` mouseMotionHandler $ previewStone opts boardHoverMVar
+    _ <- canvas `on` exposeEvent $ canvasExposeHandler opts gameStateMVar boardHoverMVar
+    _ <- canvas `on` buttonPressEvent $ canvasClickHandler opts boardClickMVar
+    _ <- canvas `on` motionNotifyEvent $ mouseMotionHandler opts boardHoverMVar
     
     vBox <- vBoxNew False 0
     boxPackStart vBox btnStartGame PackNatural 0
