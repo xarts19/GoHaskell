@@ -20,13 +20,13 @@ mainWithGui opts args = do
     gameStateMVar <- newEmptyMVar
     boardClickMVar <- newEmptyMVar
     boardHoverMVar <- newEmptyMVar
-                
+
     _ <- initGUI
 
     window <- windowNew
     set window [windowDefaultWidth := 700, windowDefaultHeight := 400,
                 containerBorderWidth := 10]
-    
+
 
     btnStartGame <- buttonNewWithLabel "New game"
     _ <- onClicked btnStartGame $ do
@@ -41,7 +41,7 @@ mainWithGui opts args = do
     _ <- canvas `on` exposeEvent $ canvasExposeHandler opts gameStateMVar boardHoverMVar
     _ <- canvas `on` buttonPressEvent $ canvasClickHandler opts boardClickMVar
     _ <- canvas `on` motionNotifyEvent $ mouseMotionHandler opts boardHoverMVar
-    
+
     vBox <- vBoxNew False 0
     boxPackStart vBox btnStartGame PackNatural 0
     boxPackEnd vBox exitButton PackNatural 0
@@ -49,7 +49,7 @@ mainWithGui opts args = do
     hBox <- hBoxNew False 0
     boxPackStart hBox canvas PackGrow 0
     boxPackStart hBox vBox PackNatural 0
-    
+
     containerAdd window hBox
     _ <- window `on` deleteEvent $ liftIO (putMVar exitFlag ExitSuccess) >>
                                    liftIO mainQuit >>
@@ -60,7 +60,7 @@ mainWithGui opts args = do
     signal <- takeMVar exitFlag
     postGUIAsync mainQuit
     exitWith signal
-    
+
 
 startMultiplayer :: Window -> GameOptions -> MVar GameState -> MVar BoardCoord -> IO ()
 startMultiplayer window opts gameStateMVar boardClickMVar = do
@@ -101,7 +101,7 @@ calcScale (width, height) numGrids = (totalSize, gridStep, numGrids)
           height' = fromIntegral height
           totalSize = (if width' < height' then width' else height') :: Double
           gridStep = totalSize / (fromIntegral numGrids + 1)
-          
+
 
 canvasExposeHandler :: GameOptions -> MVar GameState -> MVar BoardCoord -> EventM EExpose Bool
 canvasExposeHandler opts gameStateMVar boardHoverMVar = do
@@ -113,14 +113,14 @@ canvasExposeHandler opts gameStateMVar boardHoverMVar = do
         -- Draw board using the cairo api
         renderWithDrawable win $ do
             drawBoard totalSize gridStep numGrids
-            
+
         isGameInProgress <- liftM not $ isEmptyMVar gameStateMVar
         if isGameInProgress
-            then do 
+            then do
                 gameState <- readMVar gameStateMVar
                 renderWithDrawable win $ do
                     drawStones (gameState^.curBoard) gridStep
-                    
+
                 when (gameState^.curPlayer == opts^.pcPlayer) $ do
                     isMouseOnBoard <- liftM not $ isEmptyMVar boardHoverMVar
                     when isMouseOnBoard $ do
@@ -129,14 +129,14 @@ canvasExposeHandler opts gameStateMVar boardHoverMVar = do
                             renderWithDrawable win $ do
                                 drawStonePreview boardCoord gridStep (opts^.pcPlayer)
             else return ()
-            
+
     return False
 
 
 canvasClickHandler :: GameOptions -> MVar BoardCoord -> EventM EButton Bool
 canvasClickHandler opts boardClickMVar = do
     win <- eventWindow
-    (x, y) <- eventCoordinates 
+    (x, y) <- eventCoordinates
     liftIO $ do
         sizes <- drawableGetSize win
         let (_, gridStep, numGrids) = calcScale sizes (opts^.boardSize)
@@ -151,7 +151,7 @@ canvasClickHandler opts boardClickMVar = do
 mouseMotionHandler :: GameOptions -> MVar BoardCoord -> EventM EMotion Bool
 mouseMotionHandler opts boardHoverMVar = do
     win <- eventWindow
-    (x, y) <- eventCoordinates 
+    (x, y) <- eventCoordinates
     liftIO $ do
         sizes <- drawableGetSize win
         let (_, gridStep, numGrids) = calcScale sizes (opts^.boardSize)
@@ -185,7 +185,7 @@ drawBoard totalSize gridStep i = do
 drawStones :: Board -> Double -> Render ()
 drawStones board gridStep = do
     sequence_ $ map drawStone $ boardToList board
-    where 
+    where
         drawStone (_, _, Empty) = return ()
         drawStone (i, j, color) = do
             case color of
